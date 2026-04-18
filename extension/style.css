@@ -1501,7 +1501,7 @@ footer { animation: fadeUp 0.5s ease 0.65s both; }
 .settings-btn {
   background: none;
   border: none;
-  color: #5a514a; /* Darker than var(--muted) */
+  color: var(--ink);
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
