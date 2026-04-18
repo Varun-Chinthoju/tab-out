@@ -39,11 +39,22 @@ async function fetchOpenTabs() {
     const newtabUrl = `chrome-extension://${extensionId}/index.html`;
 
     const tabs = await chrome.tabs.query({});
+    
+    // Fetch tab group information if supported
+    let groupsMap = {};
+    if (chrome.tabGroups) {
+      const groups = await chrome.tabGroups.query({});
+      groups.forEach(g => groupsMap[g.id] = g);
+    }
+
     openTabs = tabs.map(t => ({
       id:       t.id,
       url:      t.url,
       title:    t.title,
       windowId: t.windowId,
+      groupId:  t.groupId,
+      groupTitle: groupsMap[t.groupId]?.title || null,
+      groupColor: groupsMap[t.groupId]?.color || null,
       active:   t.active,
       // Flag Tab Out's own pages so we can detect duplicate new tabs
       isTabOut: t.url === newtabUrl || t.url === 'chrome://newtab/',
@@ -1229,7 +1240,7 @@ function renderDomainCard(group, settings = {}) {
       dynamicStyle = `left: ${rx}px; top: ${ry}px;`;
     }
   } else if (layoutMode === 'structured') {
-    const color = getDomainColor(group.domain);
+    const color = group.isTabGroup ? (group.groupColor || getDomainColor(group.domain)) : getDomainColor(group.domain);
     dynamicStyle = `--domain-color: ${color};`;
   }
 
@@ -1401,10 +1412,21 @@ async function renderStaticDashboard() {
 
   for (const tab of realTabs) {
     try {
+      // 0. Tab Groups take highest precedence
+      if (tab.groupId !== -1 && tab.groupId !== undefined) {
+        const key = `group-${tab.groupId}`;
+        const label = tab.groupTitle || `Group ${tab.groupId}`;
+        if (!groupMap[key]) groupMap[key] = { domain: key, label: label, tabs: [], isTabGroup: true, groupColor: tab.groupColor };
+        groupMap[key].tabs.push(tab);
+        continue;
+      }
+      
+      // 1. Landing pages next
       if (isLandingPage(tab.url)) {
         landingTabs.push(tab);
         continue;
       }
+      // 2. Custom groups
       const customRule = matchCustomGroup(tab.url);
       if (customRule) {
         const key = customRule.groupKey;
@@ -1412,6 +1434,7 @@ async function renderStaticDashboard() {
         groupMap[key].tabs.push(tab);
         continue;
       }
+      // 3. Fallback to domain
       let hostname = tab.url && tab.url.startsWith('file://') ? 'local-files' : new URL(tab.url).hostname;
       if (!hostname) continue;
       if (!groupMap[hostname]) groupMap[hostname] = { domain: hostname, tabs: [] };
@@ -1659,20 +1682,16 @@ document.addEventListener('click', async (e) => {
     if (chip) {
       const rect = chip.getBoundingClientRect();
       shootConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      chip.style.transition = 'opacity 0.2s, transform 0.2s';
-      chip.style.opacity    = '0';
-      chip.style.transform  = 'scale(0.8)';
+      
+      chip.classList.add('closing');
       setTimeout(() => {
         chip.remove();
         // If the card now has no tabs, remove it too
-        const parentCard = document.querySelector('.mission-card:has(.mission-pages:empty)');
-        if (parentCard) animateCardOut(parentCard);
-        document.querySelectorAll('.mission-card').forEach(c => {
-          if (c.querySelectorAll('.page-chip[data-action="focus-tab"]').length === 0) {
-            animateCardOut(c);
-          }
-        });
-      }, 200);
+        const parentCard = chip.closest('.mission-card');
+        if (parentCard && parentCard.querySelectorAll('.page-chip:not(.closing)').length === 0) {
+          animateCardOut(parentCard);
+        }
+      }, 300);
     }
 
     // Update footer

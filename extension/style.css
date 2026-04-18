@@ -1100,8 +1100,9 @@ footer {
   padding-top: 20px;
   border-top: 1px solid var(--warm-gray);
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start; /* Move to left */
   align-items: center;
+  gap: 40px;
 }
 
 .footer-stats {
@@ -1110,7 +1111,7 @@ footer {
 }
 
 .stat {
-  text-align: center;
+  text-align: left; /* Align text to left */
 }
 
 .stat-num {
@@ -1133,6 +1134,29 @@ footer {
 .last-refresh {
   font-size: 11px;
   color: var(--muted);
+  margin-left: auto; /* Push refresh info to the right */
+}
+
+/* Sliding Animations */
+.mission-card {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mission-card.closing {
+  opacity: 0;
+  transform: scale(0.9) translateY(20px);
+  pointer-events: none;
+}
+
+.page-chip {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.page-chip.closing {
+  opacity: 0;
+  transform: translateX(-20px);
+  margin-top: -30px; /* Collapse space */
+  pointer-events: none;
 }
 
 .refresh-btn {
