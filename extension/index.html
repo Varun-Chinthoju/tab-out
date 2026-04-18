@@ -24,6 +24,18 @@
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
+
+    <div class="header-center">
+      <div class="header-stat">
+        <span class="stat-num" id="statTabs">—</span>
+        <span class="stat-label">tabs</span>
+      </div>
+      <div class="header-refresh">
+        <span id="lastRefreshDisplay"></span>
+        <button class="refresh-btn" data-action="refresh-dashboard">Refresh</button>
+      </div>
+    </div>
+
     <div class="header-right">
       <button class="action-btn primary" id="addNoteBtn" style="padding: 8px 16px;">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:16px;height:16px;">
@@ -71,15 +83,7 @@
        ================================================================ -->
   <footer>
     <div class="footer-stats">
-      <div class="stat">
-        <div class="stat-num" id="statTabs">—</div>
-        <div class="stat-label">Open tabs</div>
-      </div>
-    </div>
-    <div class="last-refresh">
-      <!-- "Refreshed 2 mins ago" — written by timeAgo() in app.js -->
-      <span id="lastRefreshDisplay"></span>
-      <button class="refresh-btn" data-action="refresh-dashboard">Refresh</button>
+      <!-- Moved to header for accessibility -->
     </div>
   </footer>
 
