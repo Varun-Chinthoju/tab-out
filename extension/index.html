@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Out</title>
+
+  <!-- Google Fonts: Newsreader (for headings/numbers) + DM Sans (for body text) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=DM+Sans:wght@300;400;500;600&family=Caveat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+
+
+
+  <!-- ================================================================
+       HEADER — greeting on the left
+       ================================================================ -->
+  <header>
+    <div class="header-left">
+      <!-- "Good afternoon" — written by getGreeting() in app.js -->
+      <h1 id="greeting"></h1>
+      <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
+      <div class="date" id="dateDisplay"></div>
+    </div>
+    <div class="header-right">
+      <button class="settings-btn" id="settingsBtn" title="Settings">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.592c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.332.183-.582.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+      </button>
+    </div>
+
+  <!-- ================================================================
+       TAB OUT DUPES BANNER — appears when you have extra Tab Out tabs open
+       Hidden by default; app.js shows it when dupeTabOutCount > 1
+       ================================================================ -->
+  <div class="tab-cleanup-banner" id="tabOutDupeBanner" style="display:none">
+    <div class="tab-cleanup-left">
+      <div class="tab-cleanup-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
+        </svg>
+      </div>
+      <div class="tab-cleanup-text">
+        You have <strong id="tabOutDupeCount"></strong> Tab Out tabs open. Keep just this one?
+      </div>
+    </div>
+    <button class="tab-cleanup-btn" data-action="close-tabout-dupes">Close extras</button>
+  </div>
+
+  <!-- ================================================================
+       MAIN CONTENT AREA — two-column layout
+       Left: open tabs (domain/mission cards)
+       Right: saved for later checklist
+       The right column only renders when it has items (JS controls this)
+       ================================================================ -->
+  <div class="dashboard-columns" id="dashboardColumns">
+
+    <!-- LEFT COLUMN: Open tabs -->
+    <div class="active-section" id="openTabsSection" style="display:none">
+      <div class="section-header">
+        <h2 id="openTabsSectionTitle">Right now</h2>
+        <div class="section-line"></div>
+        <div class="section-count" id="openTabsSectionCount"></div>
+      </div>
+      <div class="missions" id="openTabsMissions"></div>
+    </div>
+
+    <!-- RIGHT COLUMN: Saved for Later checklist -->
+    <div class="deferred-column" id="deferredColumn" style="display:none">
+      <div class="section-header">
+        <h2>Saved for later</h2>
+        <div class="section-line"></div>
+        <div class="section-count" id="deferredCount"></div>
+      </div>
+
+      <!-- Active checklist items — injected by renderDeferredList() in app.js -->
+      <div class="deferred-list" id="deferredList"></div>
+
+      <!-- Empty state — shown when no active deferred tabs -->
+      <div class="deferred-empty" id="deferredEmpty" style="display:none">
+        Nothing saved. Living in the moment.
+      </div>
+
+      <!-- Archive section — collapsed by default -->
+      <div class="deferred-archive" id="deferredArchive" style="display:none">
+        <button class="archive-toggle" id="archiveToggle">
+          <svg class="archive-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+          Archive
+          <span class="archive-count" id="archiveCount"></span>
+        </button>
+        <div class="archive-body" id="archiveBody" style="display:none">
+          <input type="text" class="archive-search" id="archiveSearch" placeholder="Search archived tabs...">
+          <div class="archive-list" id="archiveList"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .dashboard-columns -->
+
+  <!-- ================================================================
+       FOOTER — global stats + refresh control
+       ================================================================ -->
+  <footer>
+    <div class="footer-stats">
+      <div class="stat">
+        <div class="stat-num" id="statTabs">—</div>
+        <div class="stat-label">Open tabs</div>
+      </div>
+    </div>
+    <div class="last-refresh">
+      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a></span>
+    </div>
+  </footer>
+
+</div><!-- end .container -->
+
+<!-- ================================================================
+     TOAST — floats above everything, used for action confirmations
+     Hidden by default via CSS (opacity:0, translateY)
+     ================================================================ -->
+<div class="toast" id="toast">
+  <!-- Checkmark circle icon (Heroicons outline) -->
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+  </svg>
+  <span id="toastText"></span>
+</div>
+
+<!-- ================================================================
+     SETTINGS MODAL
+     ================================================================ -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="settings-modal">
+    <h2>Settings</h2>
+    
+    <div class="settings-group">
+      <label>Theme</label>
+      <div class="settings-options" id="themeOptions">
+        <button class="setting-control" data-theme="system">System</button>
+        <button class="setting-control" data-theme="light">Light</button>
+        <button class="setting-control" data-theme="dark">Dark</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Accent Color</label>
+      <div class="color-palette" id="accentPalette">
+        <button class="color-swatch" data-color="#c8713a" style="background: #c8713a;" title="Amber"></button>
+        <button class="color-swatch" data-color="#5a7a62" style="background: #5a7a62;" title="Sage"></button>
+        <button class="color-swatch" data-color="#5a6b7a" style="background: #5a6b7a;" title="Slate"></button>
+        <button class="color-swatch" data-color="#b35a5a" style="background: #b35a5a;" title="Rose"></button>
+        <button class="color-swatch" data-color="#eab308" style="background: #eab308;" title="Gold"></button>
+        <button class="color-swatch" data-color="#3b82f6" style="background: #3b82f6;" title="Blue"></button>
+        <button class="color-swatch" data-color="#8b5cf6" style="background: #8b5cf6;" title="Violet"></button>
+        <button class="color-swatch" data-color="#ec4899" style="background: #ec4899;" title="Pink"></button>
+        <button class="color-swatch" data-color="#14b8a6" style="background: #14b8a6;" title="Teal"></button>
+        <button class="color-swatch" data-color="#22c55e" style="background: #22c55e;" title="Green"></button>
+        
+        <div class="custom-color-wrapper" id="customAccentWrapper" title="Custom Color">
+          <input type="color" id="accentColorPicker" value="#c8713a">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Sticky Text Color</label>
+      <div class="color-picker-wrapper">
+        <input type="color" id="stickyTextColorPicker" value="#1a1613">
+        <span id="stickyTextColorValue" style="font-size: 12px; color: var(--muted); font-family: monospace;">#1A1613</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Layout Mode</label>
+      <div class="settings-options" id="layoutModeOptions">
+        <button class="setting-control" data-layout="default">Default</button>
+        <button class="setting-control" data-layout="structured">Structured</button>
+        <button class="setting-control" data-layout="chaos">Freeform</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Card Style</label>
+      <div class="settings-options" id="cardStyleOptions">
+        <button class="setting-control" data-style="default">Default</button>
+        <button class="setting-control" data-style="sticky">Sticky</button>
+        <button class="setting-control" data-style="drawn">Drawn</button>
+        <button class="setting-control" data-style="glass">Glass</button>
+        <button class="setting-control" data-style="brutalism">Brutalist</button>
+        <button class="setting-control" data-style="terminal">Terminal</button>
+        <button class="setting-control" data-style="polaroid">Polaroid</button>
+        <button class="setting-control" data-style="receipt">Receipt</button>
+        <button class="setting-control" data-style="cyberpunk">Cyberpunk</button>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Background</label>
+      <div class="settings-options" id="bgTypeOptions" style="margin-bottom: 12px;">
+        <button class="setting-control" data-bg="none">None</button>
+        <button class="setting-control" data-bg="grid">Grid</button>
+        <button class="setting-control" data-bg="dots">Dots</button>
+        <button class="setting-control" data-bg="waves">Waves</button>
+        <button class="setting-control" data-bg="blueprint">Blueprint</button>
+        <button class="setting-control" data-bg="custom">Custom Image</button>
+      </div>
+      <div id="customBgControls" style="display: none;">
+        <div class="color-picker-wrapper">
+          <input type="file" id="bgImageInput" accept="image/*" style="display: none;">
+          <button class="setting-control" id="uploadBgBtn">Upload Image</button>
+          <button class="setting-control danger" id="clearBgBtn">Clear</button>
+        </div>
+        <div id="bgImageStatus" style="font-size: 11px; color: var(--muted); margin-top: 8px;">No custom background</div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Layout Density</label>
+      <div class="settings-options" id="densityOptions">
+        <button class="setting-control" data-density="comfortable">Comfortable</button>
+        <button class="setting-control" data-density="compact">Compact</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-close-btn" id="closeSettingsBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Personal config (gitignored) — defines LOCAL_LANDING_PAGE_PATTERNS etc. -->
+<!-- If the file doesn't exist, that's fine — app.js uses sensible defaults. -->
+<script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
+
+<!-- Main dashboard logic — loads last so the DOM is ready -->
+<script src="app.js"></script>
+</body>
+</html>
