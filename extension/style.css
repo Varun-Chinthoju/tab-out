@@ -208,46 +208,96 @@ body::after {
   display: none; /* remove colored top bar */
 }
 
-/* 3. Glassmorphism */
+/* 3. Glassmorphism — Liquid Glass Effect */
 [data-card-style="glass"] .mission-card {
-  background: rgba(255, 255, 255, 0.35);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  color: #1a1a1a;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border: none;
+  isolation: isolate;
+  box-shadow: 0px 0px 21px -8px rgba(255, 255, 255, 0.3);
+  border-radius: 28px;
 }
-[data-theme="dark"] [data-card-style="glass"] .mission-card {
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+
+/* Tint and inner shadow layer */
+[data-card-style="glass"] .mission-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 28px;
+  box-shadow: inset 0 0 12px -4px rgba(255, 255, 255, 0.7);
+  background-color: rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+  display: block; /* Override previous display:none */
+}
+
+/* Backdrop blur and distortion layer */
+[data-card-style="glass"] .mission-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 28px;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  filter: url(#glass-distortion);
+  -webkit-filter: url(#glass-distortion);
+  isolation: isolate;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] [data-card-style="glass"] .mission-card::before {
+  box-shadow: inset 0 0 12px -4px rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] [data-card-style="glass"] .mission-card::after {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+[data-card-style="glass"] .mission-card .mission-content {
+  position: relative;
+  z-index: 10;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] [data-card-style="glass"] .mission-card .mission-content {
   color: #f0f0f0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
+
 [data-card-style="glass"] .mission-card .mission-name {
   color: inherit;
-  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.3);
+  font-weight: 600;
 }
-[data-theme="dark"] [data-card-style="glass"] .mission-card .mission-name {
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-}
+
 [data-card-style="glass"] .mission-card .chip-text,
 [data-card-style="glass"] .mission-card .mission-summary {
   color: inherit;
+  opacity: 0.9;
 }
+
 [data-card-style="glass"] .mission-card .open-tabs-badge,
 [data-card-style="glass"] .mission-card .action-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
 [data-theme="dark"] [data-card-style="glass"] .mission-card .open-tabs-badge,
 [data-theme="dark"] [data-card-style="glass"] .mission-card .action-btn {
   background: rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.05);
 }
+
 [data-card-style="glass"] .mission-card .chip-action {
-  opacity: 0.6;
+  opacity: 0.7;
 }
-[data-card-style="glass"] .mission-card::before { display: none; }
 
 /* 2. Neo-Brutalism */
 [data-card-style="brutalism"] .mission-card {
@@ -517,19 +567,21 @@ body {
 }
 
 /* Frosted glass box for the dashboard content (only in structured/default grids) */
-html:not([data-layout-mode="chaos"]):not([data-card-style="glass"]) .has-custom-bg .missions {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  border-radius: 20px;
+html:not([data-layout-mode="chaos"]) .has-custom-bg .missions {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  filter: url(#glass-distortion);
+  -webkit-filter: url(#glass-distortion);
+  border-radius: 28px;
   padding: 32px;
   margin: -32px; /* Pull it back to align with headers */
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 12px -4px rgba(255, 255, 255, 0.3), 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
-html[data-theme="dark"]:not([data-layout-mode="chaos"]):not([data-card-style="glass"]) .has-custom-bg .missions {
-  background: rgba(0, 0, 0, 0.25);
+html[data-theme="dark"]:not([data-layout-mode="chaos"]) .has-custom-bg .missions {
+  background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
