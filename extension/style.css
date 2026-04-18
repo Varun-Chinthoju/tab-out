@@ -458,13 +458,44 @@ body {
 
 
 /* ---- Custom background readability ---- */
-/* Removed frosted backgrounds from header/footer as they were blocking clicks and causing visual issues. */
+.container.has-custom-bg .glass-board {
+  background: rgba(255, 255, 255, 0.85); /* Solid-ish white frosted background */
+  backdrop-filter: blur(40px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
 
-.has-custom-bg .stat-num,
-.has-custom-bg .stat-label,
-.has-custom-bg .last-refresh,
-.has-custom-bg .last-refresh a {
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+.container.has-custom-bg {
+  --ink: #000000;
+  --muted: #000000;
+}
+
+.container.has-custom-bg .date,
+.container.has-custom-bg .stat-label,
+.container.has-custom-bg .header-refresh,
+.container.has-custom-bg .mission-summary,
+.container.has-custom-bg .page-chip-overflow,
+.container.has-custom-bg .section-header h2,
+.container.has-custom-bg .action-btn,
+.container.has-custom-bg .refresh-btn,
+.container.has-custom-bg .settings-btn,
+.container.has-custom-bg .chip-action {
+  color: #000000 !important;
+  opacity: 1 !important;
+}
+
+.container.has-custom-bg .section-line {
+  background: #000000 !important;
+  opacity: 0.2;
+}
+
+.container.has-custom-bg .action-btn {
+  border-color: #000000 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+.container.has-custom-bg .stat-num {
+  color: #000000 !important;
+  text-shadow: none;
 }
 
 /* ---- Mission Cards Grid ---- */
