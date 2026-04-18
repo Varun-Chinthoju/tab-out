@@ -1165,9 +1165,16 @@ function renderNoteCard(note, settings) {
       if (pos.w) dynamicStyle += `width: ${pos.w}px;`;
       if (pos.h) dynamicStyle += `height: ${pos.h}px;`;
     } else {
-      const rx = (window.innerWidth / 2) - 130 + (Math.random() * 100 - 50);
-      const ry = (window.innerHeight / 2) - 100 + (Math.random() * 100 - 50);
-      dynamicStyle = `left: ${rx}px; top: ${ry}px;`;
+      const spot = findSmartSpot(260, 200, settings);
+      dynamicStyle = `left: ${spot.x}px; top: ${spot.y}px;`;
+      
+      setTimeout(async () => {
+        const { cardPositions = {} } = await chrome.storage.local.get('cardPositions');
+        if (!cardPositions[stableId]) {
+          cardPositions[stableId] = { x: spot.x, y: spot.y, z: 1 };
+          await chrome.storage.local.set({ cardPositions });
+        }
+      }, 0);
     }
   } else {
     const savedPos = settings.cardPositions?.[stableId];
@@ -1231,13 +1238,20 @@ function renderDomainCard(group, settings = {}) {
       if (pos.w) dynamicStyle += `width: ${pos.w}px;`;
       if (pos.h) dynamicStyle += `height: ${pos.h}px;`;
     } else {
-      // Default to center of screen (with a bit of random jitter)
+      // SMART PLACEMENT for new cards
       const cardWidth = settings.cardSize || 260;
-      const centerX = (window.innerWidth / 2) - (cardWidth / 2);
-      const centerY = (window.innerHeight / 2) - 150;
-      const rx = centerX + (Math.random() * 100 - 50);
-      const ry = centerY + (Math.random() * 100 - 50);
-      dynamicStyle = `left: ${rx}px; top: ${ry}px;`;
+      const spot = findSmartSpot(cardWidth, 200, settings);
+      
+      dynamicStyle = `left: ${spot.x}px; top: ${spot.y}px;`;
+      
+      // Save it immediately so it doesn't jump on next re-render
+      setTimeout(async () => {
+        const { cardPositions = {} } = await chrome.storage.local.get('cardPositions');
+        if (!cardPositions[stableId]) {
+          cardPositions[stableId] = { x: spot.x, y: spot.y, z: 1 };
+          await chrome.storage.local.set({ cardPositions });
+        }
+      }, 0);
     }
   } else if (layoutMode === 'structured') {
     const color = group.isTabGroup ? (group.groupColor || getDomainColor(group.domain)) : getDomainColor(group.domain);
@@ -1514,6 +1528,54 @@ async function renderDashboard() {
    ---------------------------------------------------------------- */
 
 /**
+ * findSmartSpot(cardWidth, cardHeight, settings)
+ * 
+ * Generates a random spot and checks for overlaps, retrying to find the clearest space.
+ */
+function findSmartSpot(cardWidth, cardHeight, settings) {
+  const container = document.getElementById('openTabsMissions');
+  // Use window dimensions if container isn't ready, but with healthy margins
+  const boardWidth = container ? container.offsetWidth : window.innerWidth - 120;
+  const boardHeight = window.innerHeight - 250;
+
+  const maxX = Math.max(boardWidth - cardWidth, 100);
+  const maxY = Math.max(boardHeight - cardHeight, 100);
+
+  // Get existing card rects to avoid
+  const existingRects = [...document.querySelectorAll('.mission-card')].map(el => ({
+    x: el.offsetLeft,
+    y: el.offsetTop,
+    w: el.offsetWidth,
+    h: el.offsetHeight
+  }));
+
+  let bestSpot = { x: 40, y: 150 };
+  let minOverlap = Infinity;
+
+  // Try 25 random samples to find the best one
+  for (let i = 0; i < 25; i++) {
+    const x = 40 + Math.random() * (maxX - 40);
+    const y = 150 + Math.random() * (maxY - 150);
+    
+    let currentOverlap = 0;
+    for (const r of existingRects) {
+      const overlapX = Math.max(0, Math.min(x + cardWidth, r.x + r.w) - Math.max(x, r.x));
+      const overlapY = Math.max(0, Math.min(y + cardHeight, r.y + r.h) - Math.max(y, r.y));
+      currentOverlap += overlapX * overlapY;
+    }
+    
+    if (currentOverlap < minOverlap) {
+      minOverlap = currentOverlap;
+      bestSpot = { x, y };
+    }
+    
+    if (minOverlap === 0) break; // Found perfect spot
+  }
+  
+  return bestSpot;
+}
+
+/**
  * findEmptySpot(settings)
  *
  * Scans current card positions and returns an {x, y} coordinate
@@ -1573,7 +1635,7 @@ document.addEventListener('click', async (e) => {
     
     // In freeform mode, find an empty spot first
     if (settings.layoutMode === 'chaos') {
-      const spot = await findEmptySpot(settings);
+      const spot = findSmartSpot(settings.cardSize || 260, 200, settings);
       const cardPositions = settings.cardPositions || {};
       cardPositions[newNoteId] = { x: spot.x, y: spot.y, z: 999 };
       await chrome.storage.local.set({ cardPositions });
