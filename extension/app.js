@@ -1817,6 +1817,24 @@ function applySettings(settings) {
   root.setAttribute('data-layout-mode', layoutMode);
   root.setAttribute('data-bg', bgType);
 
+  // 1b. Cleanup inline positioning if switching away from chaos mode,
+  // or restore it if switching to chaos mode.
+  document.querySelectorAll('.mission-card').forEach(card => {
+    if (layoutMode !== 'chaos') {
+      card.style.removeProperty('left');
+      card.style.removeProperty('top');
+      card.style.removeProperty('--chaos-z');
+    } else {
+      const stableId = card.dataset.domainId;
+      const pos = settings.cardPositions?.[stableId];
+      if (pos) {
+        card.style.left = `${pos.x}px`;
+        card.style.top = `${pos.y}px`;
+        card.style.setProperty('--chaos-z', pos.z || 1);
+      }
+    }
+  });
+
   // 2. Apply CSS Variables
   root.style.setProperty('--accent', accentColor);
   root.style.setProperty('--sticky-text', stickyTextColor);
