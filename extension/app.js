@@ -199,92 +199,6 @@ async function closeTabOutDupes() {
 
 
 /* ----------------------------------------------------------------
-   SAVED FOR LATER — chrome.storage.local
-
-   Replaces the old server-side SQLite + REST API with Chrome's
-   built-in key-value storage. Data persists across browser sessions
-   and doesn't require a running server.
-
-   Data shape stored under the "deferred" key:
-   [
-     {
-       id: "1712345678901",          // timestamp-based unique ID
-       url: "https://example.com",
-       title: "Example Page",
-       savedAt: "2026-04-04T10:00:00.000Z",  // ISO date string
-       completed: false,             // true = checked off (archived)
-       dismissed: false              // true = dismissed without reading
-     },
-     ...
-   ]
-   ---------------------------------------------------------------- */
-
-/**
- * saveTabForLater(tab)
- *
- * Saves a single tab to the "Saved for Later" list in chrome.storage.local.
- * @param {{ url: string, title: string }} tab
- */
-async function saveTabForLater(tab) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  deferred.push({
-    id:        Date.now().toString(),
-    url:       tab.url,
-    title:     tab.title,
-    savedAt:   new Date().toISOString(),
-    completed: false,
-    dismissed: false,
-  });
-  await chrome.storage.local.set({ deferred });
-}
-
-/**
- * getSavedTabs()
- *
- * Returns all saved tabs from chrome.storage.local.
- * Filters out dismissed items (those are gone for good).
- * Splits into active (not completed) and archived (completed).
- */
-async function getSavedTabs() {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const visible = deferred.filter(t => !t.dismissed);
-  return {
-    active:   visible.filter(t => !t.completed),
-    archived: visible.filter(t => t.completed),
-  };
-}
-
-/**
- * checkOffSavedTab(id)
- *
- * Marks a saved tab as completed (checked off). It moves to the archive.
- */
-async function checkOffSavedTab(id) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const tab = deferred.find(t => t.id === id);
-  if (tab) {
-    tab.completed = true;
-    tab.completedAt = new Date().toISOString();
-    await chrome.storage.local.set({ deferred });
-  }
-}
-
-/**
- * dismissSavedTab(id)
- *
- * Marks a saved tab as dismissed (removed from all lists).
- */
-async function dismissSavedTab(id) {
-  const { deferred = [] } = await chrome.storage.local.get('deferred');
-  const tab = deferred.find(t => t.id === id);
-  if (tab) {
-    tab.dismissed = true;
-    await chrome.storage.local.set({ deferred });
-  }
-}
-
-
-/* ----------------------------------------------------------------
    UI HELPERS
    ---------------------------------------------------------------- */
 
@@ -469,27 +383,6 @@ function checkAndShowEmptyState() {
 
   const countEl = document.getElementById('openTabsSectionCount');
   if (countEl) countEl.textContent = '0 domains';
-}
-
-/**
- * timeAgo(dateStr)
- *
- * Converts an ISO date string into a human-friendly relative time.
- * "2026-04-04T10:00:00Z" → "2 hrs ago" or "yesterday"
- */
-function timeAgo(dateStr) {
-  if (!dateStr) return '';
-  const then = new Date(dateStr);
-  const now  = new Date();
-  const diffMins  = Math.floor((now - then) / 60000);
-  const diffHours = Math.floor((now - then) / 3600000);
-  const diffDays  = Math.floor((now - then) / 86400000);
-
-  if (diffMins < 1)   return 'just now';
-  if (diffMins < 60)  return diffMins + ' min ago';
-  if (diffHours < 24) return diffHours + ' hr' + (diffHours !== 1 ? 's' : '') + ' ago';
-  if (diffDays === 1) return 'yesterday';
-  return diffDays + ' days ago';
 }
 
 /**
@@ -1188,9 +1081,6 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
-        </button>
         <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
@@ -1209,6 +1099,90 @@ function buildOverflowChips(hiddenTabs, urlCounts = {}) {
 /* ----------------------------------------------------------------
    DOMAIN CARD RENDERER
    ---------------------------------------------------------------- */
+
+/**
+ * parseMarkdown(text)
+ *
+ * A lightweight regex-based markdown parser for notes.
+ */
+function parseMarkdown(text) {
+  if (!text) return '<p style="opacity:0.5 italic">Click to edit...</p>';
+  
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Headers
+  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+
+  // Bold & Italic
+  html = html.replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>');
+  html = html.replace(/\*(.*)\*/gim, '<em>$1</em>');
+
+  // Links
+  html = html.replace(/\[(.*?)\]\((.*?)\)/gim, '<a href="$2" target="_blank">$1</a>');
+
+  // Lists
+  html = html.replace(/^\s*[\-\*]\s+(.*)$/gim, '<ul><li>$1</li></ul>');
+  html = html.replace(/<\/ul>\s*<ul>/gim, ''); // Merge adjacent lists
+
+  // Line breaks to paragraphs (if not already handled by headers/lists)
+  const lines = html.split('\n');
+  const processedLines = lines.map(line => {
+    if (line.startsWith('<h') || line.startsWith('<ul>')) return line;
+    return line.trim() ? `<p>${line}</p>` : '';
+  });
+
+  return processedLines.join('');
+}
+
+/**
+ * renderNoteCard(note, settings)
+ */
+function renderNoteCard(note, settings) {
+  const layoutMode = settings.layoutMode || 'default';
+  let dynamicStyle = '';
+  const stableId = note.id;
+
+  if (layoutMode === 'chaos') {
+    const pos = settings.cardPositions?.[stableId];
+    if (pos) {
+      dynamicStyle = `left: ${pos.x}px; top: ${pos.y}px; --chaos-z: ${pos.z || 1};`;
+      if (pos.w) dynamicStyle += `width: ${pos.w}px;`;
+      if (pos.h) dynamicStyle += `height: ${pos.h}px;`;
+    } else {
+      const rx = (window.innerWidth / 2) - 130 + (Math.random() * 100 - 50);
+      const ry = (window.innerHeight / 2) - 100 + (Math.random() * 100 - 50);
+      dynamicStyle = `left: ${rx}px; top: ${ry}px;`;
+    }
+  } else {
+    const savedPos = settings.cardPositions?.[stableId];
+    if (savedPos?.w) dynamicStyle += `width: ${savedPos.w}px;`;
+    if (savedPos?.h) dynamicStyle += `height: ${savedPos.h}px;`;
+  }
+
+  const renderedHtml = parseMarkdown(note.text);
+  const isNew = !note.text;
+
+  return `
+    <div class="mission-card note-card draggable ${isNew ? 'editing' : ''}" draggable="true" data-domain-id="${stableId}" style="${dynamicStyle}">
+      <div class="status-bar" style="background: var(--accent);"></div>
+      <div class="mission-content">
+        <div class="mission-top">
+          <span class="mission-name">Note</span>
+          <button class="chip-action chip-close" data-action="delete-note" data-note-id="${stableId}" title="Delete note" style="opacity: 0.5; margin-left: auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="note-preview" data-action="edit-note">${renderedHtml}</div>
+        <textarea class="note-textarea" data-note-id="${stableId}" placeholder="Write something...">${note.text || ''}</textarea>
+      </div>
+      <div class="card-resize-handle"></div>
+    </div>`;
+}
 
 /**
  * getDomainColor(domain)
@@ -1243,18 +1217,26 @@ function renderDomainCard(group, settings = {}) {
     const pos = settings.cardPositions?.[stableId];
     if (pos) {
       dynamicStyle = `left: ${pos.x}px; top: ${pos.y}px; --chaos-z: ${pos.z || 1};`;
+      if (pos.w) dynamicStyle += `width: ${pos.w}px;`;
+      if (pos.h) dynamicStyle += `height: ${pos.h}px;`;
     } else {
-      // Default random position if not moved yet
-      const rx = Math.floor(Math.random() * 400);
-      const ry = Math.floor(Math.random() * 300);
+      // Default to center of screen (with a bit of random jitter)
+      const cardWidth = settings.cardSize || 260;
+      const centerX = (window.innerWidth / 2) - (cardWidth / 2);
+      const centerY = (window.innerHeight / 2) - 150;
+      const rx = centerX + (Math.random() * 100 - 50);
+      const ry = centerY + (Math.random() * 100 - 50);
       dynamicStyle = `left: ${rx}px; top: ${ry}px;`;
     }
   } else if (layoutMode === 'structured') {
     const color = getDomainColor(group.domain);
     dynamicStyle = `--domain-color: ${color};`;
   }
-    dynamicStyle = `--domain-color: ${color};`;
-  }
+
+  // Apply custom dimensions if they exist for this specific card
+  const savedPos = settings.cardPositions?.[stableId];
+  if (savedPos?.w) dynamicStyle += `width: ${savedPos.w}px;`;
+  if (savedPos?.h) dynamicStyle += `height: ${savedPos.h}px;`;
 
   // Count duplicates (exact URL match)
   const urlCounts = {};
@@ -1303,9 +1285,6 @@ function renderDomainCard(group, settings = {}) {
       ${faviconUrl ? `<img class="chip-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="chip-text">${label}</span>${dupeTag}
       <div class="chip-actions">
-        <button class="chip-action chip-save" data-action="defer-single-tab" data-tab-url="${safeUrl}" data-tab-title="${safeTitle}" title="Save for later">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" /></svg>
-        </button>
         <button class="chip-action chip-close" data-action="close-single-tab" data-tab-url="${safeUrl}" title="Close this tab">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
         </button>
@@ -1343,113 +1322,7 @@ function renderDomainCard(group, settings = {}) {
         <div class="mission-page-count">${tabCount}</div>
         <div class="mission-page-label">tabs</div>
       </div>
-    </div>`;
-}
-
-
-/* ----------------------------------------------------------------
-   SAVED FOR LATER — Render Checklist Column
-   ---------------------------------------------------------------- */
-
-/**
- * renderDeferredColumn()
- *
- * Reads saved tabs from chrome.storage.local and renders the right-side
- * "Saved for Later" checklist column. Shows active items as a checklist
- * and completed items in a collapsible archive.
- */
-async function renderDeferredColumn() {
-  const column         = document.getElementById('deferredColumn');
-  const list           = document.getElementById('deferredList');
-  const empty          = document.getElementById('deferredEmpty');
-  const countEl        = document.getElementById('deferredCount');
-  const archiveEl      = document.getElementById('deferredArchive');
-  const archiveCountEl = document.getElementById('archiveCount');
-  const archiveList    = document.getElementById('archiveList');
-
-  if (!column) return;
-
-  try {
-    const { active, archived } = await getSavedTabs();
-
-    // Hide the entire column if there's nothing to show
-    if (active.length === 0 && archived.length === 0) {
-      column.style.display = 'none';
-      return;
-    }
-
-    column.style.display = 'block';
-
-    // Render active checklist items
-    if (active.length > 0) {
-      countEl.textContent = `${active.length} item${active.length !== 1 ? 's' : ''}`;
-      list.innerHTML = active.map(item => renderDeferredItem(item)).join('');
-      list.style.display = 'block';
-      empty.style.display = 'none';
-    } else {
-      list.style.display = 'none';
-      countEl.textContent = '';
-      empty.style.display = 'block';
-    }
-
-    // Render archive section
-    if (archived.length > 0) {
-      archiveCountEl.textContent = `(${archived.length})`;
-      archiveList.innerHTML = archived.map(item => renderArchiveItem(item)).join('');
-      archiveEl.style.display = 'block';
-    } else {
-      archiveEl.style.display = 'none';
-    }
-
-  } catch (err) {
-    console.warn('[tab-out] Could not load saved tabs:', err);
-    column.style.display = 'none';
-  }
-}
-
-/**
- * renderDeferredItem(item)
- *
- * Builds HTML for one active checklist item: checkbox, title link,
- * domain, time ago, dismiss button.
- */
-function renderDeferredItem(item) {
-  let domain = '';
-  try { domain = new URL(item.url).hostname.replace(/^www\./, ''); } catch {}
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
-  const ago = timeAgo(item.savedAt);
-
-  return `
-    <div class="deferred-item" data-deferred-id="${item.id}">
-      <input type="checkbox" class="deferred-checkbox" data-action="check-deferred" data-deferred-id="${item.id}">
-      <div class="deferred-info">
-        <a href="${item.url}" target="_blank" rel="noopener" class="deferred-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-          <img src="${faviconUrl}" alt="" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px" onerror="this.style.display='none'">${item.title || item.url}
-        </a>
-        <div class="deferred-meta">
-          <span>${domain}</span>
-          <span>${ago}</span>
-        </div>
-      </div>
-      <button class="deferred-dismiss" data-action="dismiss-deferred" data-deferred-id="${item.id}" title="Dismiss">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-      </button>
-    </div>`;
-}
-
-/**
- * renderArchiveItem(item)
- *
- * Builds HTML for one completed/archived item (simpler: just title + date).
- */
-function renderArchiveItem(item) {
-  const ago = item.completedAt ? timeAgo(item.completedAt) : timeAgo(item.savedAt);
-  return `
-    <div class="archive-item">
-      <a href="${item.url}" target="_blank" rel="noopener" class="archive-item-title" title="${(item.title || '').replace(/"/g, '&quot;')}">
-        ${item.title || item.url}
-      </a>
-      <span class="archive-item-date">${ago}</span>
+      <div class="card-resize-handle"></div>
     </div>`;
 }
 
@@ -1476,13 +1349,15 @@ async function renderStaticDashboard() {
   if (greetingEl) greetingEl.textContent = getGreeting();
   if (dateEl)     dateEl.textContent     = getDateDisplay();
 
-  // --- Fetch tabs ---
+  // --- Fetch tabs & settings ---
   await fetchOpenTabs();
   const realTabs = getRealTabs();
+  const storageKeys = Object.keys(DEFAULT_SETTINGS);
+  const storage = await chrome.storage.local.get(storageKeys);
+  const settings = { ...DEFAULT_SETTINGS, ...storage };
+  const userNotes = settings.userNotes || [];
 
   // --- Group tabs by domain ---
-  // Landing pages (Gmail inbox, Twitter home, etc.) get their own special group
-  // so they can be closed together without affecting content tabs on the same domain.
   const LANDING_PAGE_PATTERNS = [
     { hostname: 'mail.google.com', test: (p, h) =>
         !h.includes('#inbox/') && !h.includes('#sent/') && !h.includes('#search/') },
@@ -1490,7 +1365,6 @@ async function renderStaticDashboard() {
     { hostname: 'www.linkedin.com',    pathExact: ['/'] },
     { hostname: 'github.com',          pathExact: ['/'] },
     { hostname: 'www.youtube.com',     pathExact: ['/'] },
-    // Merge personal patterns from config.local.js (if it exists)
     ...(typeof LOCAL_LANDING_PAGE_PATTERNS !== 'undefined' ? LOCAL_LANDING_PAGE_PATTERNS : []),
   ];
 
@@ -1498,12 +1372,7 @@ async function renderStaticDashboard() {
     try {
       const parsed = new URL(url);
       return LANDING_PAGE_PATTERNS.some(p => {
-        // Support both exact hostname and suffix matching (for wildcard subdomains)
-        const hostnameMatch = p.hostname
-          ? parsed.hostname === p.hostname
-          : p.hostnameEndsWith
-            ? parsed.hostname.endsWith(p.hostnameEndsWith)
-            : false;
+        const hostnameMatch = p.hostname ? parsed.hostname === p.hostname : p.hostnameEndsWith ? parsed.hostname.endsWith(p.hostnameEndsWith) : false;
         if (!hostnameMatch) return false;
         if (p.test)       return p.test(parsed.pathname, url);
         if (p.pathPrefix) return parsed.pathname.startsWith(p.pathPrefix);
@@ -1516,23 +1385,16 @@ async function renderStaticDashboard() {
   domainGroups = [];
   const groupMap    = {};
   const landingTabs = [];
-
-  // Custom group rules from config.local.js (if any)
   const customGroups = typeof LOCAL_CUSTOM_GROUPS !== 'undefined' ? LOCAL_CUSTOM_GROUPS : [];
 
-  // Check if a URL matches a custom group rule; returns the rule or null
   function matchCustomGroup(url) {
     try {
       const parsed = new URL(url);
       return customGroups.find(r => {
-        const hostMatch = r.hostname
-          ? parsed.hostname === r.hostname
-          : r.hostnameEndsWith
-            ? parsed.hostname.endsWith(r.hostnameEndsWith)
-            : false;
+        const hostMatch = r.hostname ? parsed.hostname === r.hostname : r.hostnameEndsWith ? parsed.hostname.endsWith(r.hostnameEndsWith) : false;
         if (!hostMatch) return false;
         if (r.pathPrefix) return parsed.pathname.startsWith(r.pathPrefix);
-        return true; // hostname matched, no path filter
+        return true;
       }) || null;
     } catch { return null; }
   }
@@ -1543,8 +1405,6 @@ async function renderStaticDashboard() {
         landingTabs.push(tab);
         continue;
       }
-
-      // Check custom group rules first (e.g. merge subdomains, split by path)
       const customRule = matchCustomGroup(tab.url);
       if (customRule) {
         const key = customRule.groupKey;
@@ -1552,48 +1412,35 @@ async function renderStaticDashboard() {
         groupMap[key].tabs.push(tab);
         continue;
       }
-
-      let hostname;
-      if (tab.url && tab.url.startsWith('file://')) {
-        hostname = 'local-files';
-      } else {
-        hostname = new URL(tab.url).hostname;
-      }
+      let hostname = tab.url && tab.url.startsWith('file://') ? 'local-files' : new URL(tab.url).hostname;
       if (!hostname) continue;
-
       if (!groupMap[hostname]) groupMap[hostname] = { domain: hostname, tabs: [] };
       groupMap[hostname].tabs.push(tab);
-    } catch {
-      // Skip malformed URLs
-    }
+    } catch {}
   }
 
   if (landingTabs.length > 0) {
     groupMap['__landing-pages__'] = { domain: '__landing-pages__', tabs: landingTabs };
   }
 
-  // Sort: landing pages first, then domains from landing page sites, then by tab count
-  // Collect exact hostnames and suffix patterns for priority sorting
   const landingHostnames = new Set(LANDING_PAGE_PATTERNS.map(p => p.hostname).filter(Boolean));
   const landingSuffixes = LANDING_PAGE_PATTERNS.map(p => p.hostnameEndsWith).filter(Boolean);
   function isLandingDomain(domain) {
     if (landingHostnames.has(domain)) return true;
     return landingSuffixes.some(s => domain.endsWith(s));
   }
+
   domainGroups = Object.values(groupMap).sort((a, b) => {
     const aIsLanding = a.domain === '__landing-pages__';
     const bIsLanding = b.domain === '__landing-pages__';
     if (aIsLanding !== bIsLanding) return aIsLanding ? -1 : 1;
-
     const aIsPriority = isLandingDomain(a.domain);
     const bIsPriority = isLandingDomain(b.domain);
     if (aIsPriority !== bIsPriority) return aIsPriority ? -1 : 1;
-
     return b.tabs.length - a.tabs.length;
   });
 
-  // Apply custom domain ordering if exists
-  const { domainOrder = [] } = await chrome.storage.local.get('domainOrder');
+  const { domainOrder = [] } = settings;
   if (domainOrder.length > 0) {
     domainGroups.sort((a, b) => {
       const idxA = domainOrder.indexOf('domain-' + a.domain.replace(/[^a-z0-9]/g, '-'));
@@ -1605,35 +1452,29 @@ async function renderStaticDashboard() {
     });
   }
 
-  // --- Render domain cards ---
+  // --- Render domain cards & notes ---
   const openTabsSection      = document.getElementById('openTabsSection');
   const openTabsMissionsEl   = document.getElementById('openTabsMissions');
   const openTabsSectionCount = document.getElementById('openTabsSectionCount');
   const openTabsSectionTitle = document.getElementById('openTabsSectionTitle');
 
-  if (domainGroups.length > 0 && openTabsSection) {
-    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Open tabs';
-    openTabsSectionCount.innerHTML = `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
-    
-    // Get full settings to pass current card positions to renderer
-    const storage = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
-    const settings = { ...DEFAULT_SETTINGS, ...storage };
-    
-    openTabsMissionsEl.innerHTML = domainGroups.map(g => renderDomainCard(g, settings)).join('');
-    openTabsSection.style.display = 'block';
+  if (domainGroups.length > 0 || userNotes.length > 0) {
+    if (openTabsSectionTitle) openTabsSectionTitle.textContent = 'Dashboard';
+    const countText = domainGroups.length > 0 ? `${domainGroups.length} domain${domainGroups.length !== 1 ? 's' : ''}` : 'No tabs open';
+    if (openTabsSectionCount) {
+      openTabsSectionCount.innerHTML = `${countText} &nbsp;&middot;&nbsp; <button class="action-btn close-tabs" data-action="close-all-open-tabs" style="font-size:11px;padding:3px 10px;">${ICONS.close} Close all ${realTabs.length} tabs</button>`;
+    }
+    const tabCardsHtml = domainGroups.map(g => renderDomainCard(g, settings)).join('');
+    const noteCardsHtml = userNotes.map(n => renderNoteCard(n, settings)).join('');
+    if (openTabsMissionsEl) openTabsMissionsEl.innerHTML = tabCardsHtml + noteCardsHtml;
+    if (openTabsSection) openTabsSection.style.display = 'block';
   } else if (openTabsSection) {
     openTabsSection.style.display = 'none';
   }
 
-  // --- Footer stats ---
   const statTabs = document.getElementById('statTabs');
   if (statTabs) statTabs.textContent = openTabs.length;
-
-  // --- Check for duplicate Tab Out tabs ---
   checkTabOutDupes();
-
-  // --- Render "Saved for Later" column ---
-  await renderDeferredColumn();
 }
 
 async function renderDashboard() {
@@ -1649,12 +1490,110 @@ async function renderDashboard() {
    instead of one per door.
    ---------------------------------------------------------------- */
 
+/**
+ * findEmptySpot(settings)
+ *
+ * Scans current card positions and returns an {x, y} coordinate
+ * that has minimal overlap with existing cards.
+ */
+async function findEmptySpot(settings) {
+  const cardWidth = settings.cardSize || 260;
+  const cardHeight = 200; // estimated note height
+  const missionsEl = document.getElementById('openTabsMissions');
+  if (!missionsEl) return { x: 100, y: 100 };
+
+  const containerRect = missionsEl.getBoundingClientRect();
+  const maxX = Math.max(containerRect.width - cardWidth, 400);
+  const maxY = Math.max(window.innerHeight - 300, 400);
+
+  // Get all existing card rects
+  const existingRects = [...document.querySelectorAll('.mission-card')].map(el => {
+    return {
+      left: el.offsetLeft,
+      top: el.offsetTop,
+      right: el.offsetLeft + el.offsetWidth,
+      bottom: el.offsetTop + el.offsetHeight
+    };
+  });
+
+  // Simple grid search for a free spot
+  for (let y = 40; y < maxY; y += 50) {
+    for (let x = 40; x < maxX; x += 50) {
+      const rect = { left: x, top: y, right: x + cardWidth, bottom: y + cardHeight };
+      const overlap = existingRects.some(r => {
+        return !(rect.left > r.right || rect.right < r.left || rect.top > r.bottom || rect.bottom < r.top);
+      });
+      if (!overlap) return { x, y };
+    }
+  }
+
+  // Fallback: random near top-center
+  return {
+    x: Math.max(0, (containerRect.width / 2) - (cardWidth / 2) + (Math.random() * 100 - 50)),
+    y: 100 + (Math.random() * 100 - 50)
+  };
+}
+
 document.addEventListener('click', async (e) => {
+  // New Note
+  if (e.target.closest('#addNoteBtn')) {
+    const storage = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
+    const settings = { ...DEFAULT_SETTINGS, ...storage };
+    const userNotes = settings.userNotes || [];
+    
+    const newNoteId = 'note-' + Date.now();
+    const newNote = {
+      id: newNoteId,
+      text: '',
+      type: 'note'
+    };
+    
+    // In freeform mode, find an empty spot first
+    if (settings.layoutMode === 'chaos') {
+      const spot = await findEmptySpot(settings);
+      const cardPositions = settings.cardPositions || {};
+      cardPositions[newNoteId] = { x: spot.x, y: spot.y, z: 999 };
+      await chrome.storage.local.set({ cardPositions });
+      settings.cardPositions = cardPositions; // update local ref for renderer
+    }
+
+    userNotes.push(newNote);
+    await chrome.storage.local.set({ userNotes });
+    
+    const missionsEl = document.getElementById('openTabsMissions');
+    if (missionsEl) {
+      if (missionsEl.querySelector('.missions-empty-state')) missionsEl.innerHTML = '';
+      
+      const div = document.createElement('div');
+      div.innerHTML = renderNoteCard(newNote, settings);
+      const noteEl = div.firstElementChild;
+      missionsEl.appendChild(noteEl);
+      noteEl.querySelector('textarea')?.focus();
+    }
+    return;
+  }
+
   // Walk up the DOM to find the nearest element with data-action
   const actionEl = e.target.closest('[data-action]');
   if (!actionEl) return;
 
   const action = actionEl.dataset.action;
+
+  // Delete Note
+  if (action === 'delete-note') {
+    const noteId = actionEl.dataset.noteId;
+    const card = actionEl.closest('.mission-card');
+    if (card) animateCardOut(card);
+
+    const { userNotes = [] } = await chrome.storage.local.get('userNotes');
+    const filtered = userNotes.filter(n => n.id !== noteId);
+    await chrome.storage.local.set({ userNotes: filtered });
+    
+    const { cardPositions = {} } = await chrome.storage.local.get('cardPositions');
+    delete cardPositions[noteId];
+    await chrome.storage.local.set({ cardPositions });
+    return;
+  }
 
   // ---- Close duplicate Tab Out tabs ----
   if (action === 'close-tabout-dupes') {
@@ -1682,10 +1621,22 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // ---- Focus a specific tab ----
+  // Focus a specific tab
   if (action === 'focus-tab') {
     const tabUrl = actionEl.dataset.tabUrl;
     if (tabUrl) await focusTab(tabUrl);
+    return;
+  }
+
+  // Edit Note (Toggle Edit Mode)
+  if (action === 'edit-note') {
+    const card = actionEl.closest('.note-card');
+    if (card) {
+      card.classList.add('editing');
+      const textarea = card.querySelector('.note-textarea');
+      textarea?.focus();
+      if (textarea) textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+    }
     return;
   }
 
@@ -1729,82 +1680,6 @@ document.addEventListener('click', async (e) => {
     if (statTabs) statTabs.textContent = openTabs.length;
 
     showToast('Tab closed');
-    return;
-  }
-
-  // ---- Save a single tab for later (then close it) ----
-  if (action === 'defer-single-tab') {
-    e.stopPropagation();
-    const tabUrl   = actionEl.dataset.tabUrl;
-    const tabTitle = actionEl.dataset.tabTitle || tabUrl;
-    if (!tabUrl) return;
-
-    // Save to chrome.storage.local
-    try {
-      await saveTabForLater({ url: tabUrl, title: tabTitle });
-    } catch (err) {
-      console.error('[tab-out] Failed to save tab:', err);
-      showToast('Failed to save tab');
-      return;
-    }
-
-    // Close the tab in Chrome
-    const allTabs = await chrome.tabs.query({});
-    const match   = allTabs.find(t => t.url === tabUrl);
-    if (match) await chrome.tabs.remove(match.id);
-    await fetchOpenTabs();
-
-    // Animate chip out
-    const chip = actionEl.closest('.page-chip');
-    if (chip) {
-      chip.style.transition = 'opacity 0.2s, transform 0.2s';
-      chip.style.opacity    = '0';
-      chip.style.transform  = 'scale(0.8)';
-      setTimeout(() => chip.remove(), 200);
-    }
-
-    showToast('Saved for later');
-    await renderDeferredColumn();
-    return;
-  }
-
-  // ---- Check off a saved tab (moves it to archive) ----
-  if (action === 'check-deferred') {
-    const id = actionEl.dataset.deferredId;
-    if (!id) return;
-
-    await checkOffSavedTab(id);
-
-    // Animate: strikethrough first, then slide out
-    const item = actionEl.closest('.deferred-item');
-    if (item) {
-      item.classList.add('checked');
-      setTimeout(() => {
-        item.classList.add('removing');
-        setTimeout(() => {
-          item.remove();
-          renderDeferredColumn(); // refresh counts and archive
-        }, 300);
-      }, 800);
-    }
-    return;
-  }
-
-  // ---- Dismiss a saved tab (removes it entirely) ----
-  if (action === 'dismiss-deferred') {
-    const id = actionEl.dataset.deferredId;
-    if (!id) return;
-
-    await dismissSavedTab(id);
-
-    const item = actionEl.closest('.deferred-item');
-    if (item) {
-      item.classList.add('removing');
-      setTimeout(() => {
-        item.remove();
-        renderDeferredColumn();
-      }, 300);
-    }
     return;
   }
 
@@ -1901,48 +1776,6 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ---- Archive toggle — expand/collapse the archive section ----
-document.addEventListener('click', (e) => {
-  const toggle = e.target.closest('#archiveToggle');
-  if (!toggle) return;
-
-  toggle.classList.toggle('open');
-  const body = document.getElementById('archiveBody');
-  if (body) {
-    body.style.display = body.style.display === 'none' ? 'block' : 'none';
-  }
-});
-
-// ---- Archive search — filter archived items as user types ----
-document.addEventListener('input', async (e) => {
-  if (e.target.id !== 'archiveSearch') return;
-
-  const q = e.target.value.trim().toLowerCase();
-  const archiveList = document.getElementById('archiveList');
-  if (!archiveList) return;
-
-  try {
-    const { archived } = await getSavedTabs();
-
-    if (q.length < 2) {
-      // Show all archived items
-      archiveList.innerHTML = archived.map(item => renderArchiveItem(item)).join('');
-      return;
-    }
-
-    // Filter by title or URL containing the query string
-    const results = archived.filter(item =>
-      (item.title || '').toLowerCase().includes(q) ||
-      (item.url  || '').toLowerCase().includes(q)
-    );
-
-    archiveList.innerHTML = results.map(item => renderArchiveItem(item)).join('')
-      || '<div style="font-size:12px;color:var(--muted);padding:8px 0">No results</div>';
-  } catch (err) {
-    console.warn('[tab-out] Archive search failed:', err);
-  }
-});
-
 
 /* ----------------------------------------------------------------
    SETTINGS & THEMES — chrome.storage.local
@@ -1958,7 +1791,9 @@ const DEFAULT_SETTINGS = {
   stickyTextColor: '#1a1613',
   layoutMode: 'default',
   domainOrder: [],
-  cardPositions: {}
+  cardPositions: {},
+  cardSize: 260,
+  userNotes: []
 };
 
 /**
@@ -1970,7 +1805,7 @@ const DEFAULT_SETTINGS = {
 function applySettings(settings) {
   const {
     theme, accentColor, density, bgImage, bgType, 
-    cardStyle, stickyTextColor, layoutMode
+    cardStyle, stickyTextColor, layoutMode, cardSize
   } = settings;
 
   const root = document.documentElement;
@@ -1985,6 +1820,7 @@ function applySettings(settings) {
   // 2. Apply CSS Variables
   root.style.setProperty('--accent', accentColor);
   root.style.setProperty('--sticky-text', stickyTextColor);
+  root.style.setProperty('--card-width', `${cardSize}px`);
 
   // 3. Background Logic
   const customControls = document.getElementById('customBgControls');
@@ -2051,6 +1887,18 @@ function applySettings(settings) {
   const stickyDisplay = document.getElementById('stickyTextColorValue');
   if (stickyPicker) stickyPicker.value = stickyTextColor;
   if (stickyDisplay) stickyDisplay.textContent = stickyTextColor.toUpperCase();
+
+  const addNoteBtn = document.getElementById('addNoteBtn');
+  if (addNoteBtn) {
+    addNoteBtn.style.background = accentColor;
+    addNoteBtn.style.borderColor = accentColor;
+  }
+
+  // Card Size Slider
+  const sizeSlider = document.getElementById('cardSizeSlider');
+  const sizeDisplay = document.getElementById('cardSizeValue');
+  if (sizeSlider) sizeSlider.value = cardSize;
+  if (sizeDisplay) sizeDisplay.textContent = cardSize;
 }
 
 /**
@@ -2251,11 +2099,27 @@ document.addEventListener('change', async (e) => {
 
 // Accent & Sticky color pickers
 document.addEventListener('input', async (e) => {
+  // Auto-save notes
+  if (e.target.classList.contains('note-textarea')) {
+    const noteId = e.target.dataset.noteId;
+    const text = e.target.value;
+    const { userNotes = [] } = await chrome.storage.local.get('userNotes');
+    const note = userNotes.find(n => n.id === noteId);
+    if (note) {
+      note.text = text;
+      await chrome.storage.local.set({ userNotes });
+    }
+    return;
+  }
+
   if (e.target.id === 'accentColorPicker') {
     await chrome.storage.local.set({ accentColor: e.target.value });
   }
   if (e.target.id === 'stickyTextColorPicker') {
     await chrome.storage.local.set({ stickyTextColor: e.target.value });
+  }
+  if (e.target.id === 'cardSizeSlider') {
+    await chrome.storage.local.set({ cardSize: parseInt(e.target.value) });
   }
 });
 
@@ -2275,7 +2139,16 @@ document.addEventListener('dragstart', (e) => {
     const type = card ? 'card' : 'chip';
     const id = card ? card.dataset.domainId : chip.dataset.tabId;
     
-    e.dataTransfer.setData('text/plain', `${type}:${id}`);
+    // In chaos mode, we need the mouse offset to drop correctly
+    let offsetData = '';
+    if (card && document.documentElement.getAttribute('data-layout-mode') === 'chaos') {
+      const rect = card.getBoundingClientRect();
+      const ox = e.clientX - rect.left;
+      const oy = e.clientY - rect.top;
+      offsetData = `:${ox}:${oy}`;
+    }
+    
+    e.dataTransfer.setData('text/plain', `${type}:${id}${offsetData}`);
     e.dataTransfer.effectAllowed = 'move';
     
     // Slight delay to allow ghost image to be created
@@ -2286,6 +2159,7 @@ document.addEventListener('dragstart', (e) => {
 document.addEventListener('dragover', (e) => {
   e.preventDefault(); // Required to allow drop
   
+  const layoutMode = document.documentElement.getAttribute('data-layout-mode');
   const card = e.target.closest('.mission-card.draggable');
   const chip = e.target.closest('.page-chip.draggable');
   
@@ -2294,9 +2168,8 @@ document.addEventListener('dragover', (e) => {
     el.classList.remove('drag-over', 'drag-over-top');
   });
 
-  if (draggedEl?.classList.contains('mission-card') && card && card !== draggedEl) {
+  if (draggedEl?.classList.contains('mission-card') && layoutMode !== 'chaos' && card && card !== draggedEl) {
     card.classList.add('drag-over');
-    e.dataTransfer.dropEffect = 'move';
   } else if (draggedEl?.classList.contains('page-chip') && chip && chip !== draggedEl) {
     const rect = chip.getBoundingClientRect();
     const midpoint = rect.top + rect.height / 2;
@@ -2306,8 +2179,8 @@ document.addEventListener('dragover', (e) => {
     } else {
       chip.classList.add('drag-over');
     }
-    e.dataTransfer.dropEffect = 'move';
   }
+  e.dataTransfer.dropEffect = 'move';
 });
 
 document.addEventListener('dragleave', (e) => {
@@ -2319,60 +2192,94 @@ document.addEventListener('dragleave', (e) => {
 
 document.addEventListener('drop', async (e) => {
   e.preventDefault();
-  const data = e.dataTransfer.getData('text/plain');
-  if (!data) return;
+  const dataString = e.dataTransfer.getData('text/plain');
+  if (!dataString) return;
 
-  const [type, id] = data.split(':');
-  const targetCard = e.target.closest('.mission-card.draggable');
-  const targetChip = e.target.closest('.page-chip.draggable');
+  const data = dataString.split(':');
+  const type = data[0];
+  const id = data[1];
+  
+  const layoutMode = document.documentElement.getAttribute('data-layout-mode');
 
-  // Handle Card Drop
-  if (type === 'card' && targetCard && targetCard.dataset.domainId !== id) {
+  // Handle Card Drop (Freeform / Chaos)
+  if (type === 'card' && layoutMode === 'chaos') {
+    const offsetX = parseFloat(data[2] || 0);
+    const offsetY = parseFloat(data[3] || 0);
+    
     const container = document.getElementById('openTabsMissions');
-    const cards = [...container.querySelectorAll('.mission-card')];
     const draggedCard = container.querySelector(`[data-domain-id="${id}"]`);
     
     if (draggedCard) {
-      // Reorder in DOM
-      const targetIndex = cards.indexOf(targetCard);
-      const draggedIndex = cards.indexOf(draggedCard);
+      const containerRect = container.getBoundingClientRect();
       
-      if (draggedIndex < targetIndex) {
-        targetCard.after(draggedCard);
-      } else {
-        targetCard.before(draggedCard);
-      }
+      // Calculate new position relative to the container
+      const newX = e.clientX - offsetX - containerRect.left;
+      const newY = e.clientY - offsetY - containerRect.top;
+      
+      // Update DOM immediately
+      draggedCard.style.left = `${newX}px`;
+      draggedCard.style.top = `${newY}px`;
+      
+      // Bring to front
+      const cards = [...container.querySelectorAll('.mission-card')];
+      const maxZ = Math.max(...cards.map(c => parseInt(c.style.getPropertyValue('--chaos-z') || 0)), 0);
+      const newZ = maxZ + 1;
+      draggedCard.style.setProperty('--chaos-z', newZ);
 
-      // Save new order
-      const newOrder = [...container.querySelectorAll('.mission-card')].map(c => c.dataset.domainId);
-      await chrome.storage.local.set({ domainOrder: newOrder });
-      showToast('Card order saved');
+      // Save to storage
+      const { cardPositions = {} } = await chrome.storage.local.get('cardPositions');
+      cardPositions[id] = { x: newX, y: newY, z: newZ };
+      await chrome.storage.local.set({ cardPositions });
+    }
+  }
+  // Handle Card Drop (Grid Reorder)
+  else if (type === 'card' && layoutMode !== 'chaos') {
+    const targetCard = e.target.closest('.mission-card.draggable');
+    if (targetCard && targetCard.dataset.domainId !== id) {
+      const container = document.getElementById('openTabsMissions');
+      const cards = [...container.querySelectorAll('.mission-card')];
+      const draggedCard = container.querySelector(`[data-domain-id="${id}"]`);
+      
+      if (draggedCard) {
+        const targetIndex = cards.indexOf(targetCard);
+        const draggedIndex = cards.indexOf(draggedCard);
+        
+        if (draggedIndex < targetIndex) {
+          targetCard.after(draggedCard);
+        } else {
+          targetCard.before(draggedCard);
+        }
+
+        const newOrder = [...container.querySelectorAll('.mission-card')].map(c => c.dataset.domainId);
+        await chrome.storage.local.set({ domainOrder: newOrder });
+      }
     }
   }
 
   // Handle Chip (Tab) Drop
-  if (type === 'chip' && targetChip && targetChip.dataset.tabId !== id) {
-    const draggedTabId = parseInt(id);
-    const isTop = targetChip.classList.contains('drag-over-top');
-    
-    try {
-      // Get target tab info to find its window and index
-      const targetTabId = parseInt(targetChip.dataset.tabId);
-      const targetTab = await chrome.tabs.get(targetTabId);
+  if (type === 'chip') {
+    const targetChip = e.target.closest('.page-chip.draggable');
+    if (targetChip && targetChip.dataset.tabId !== id) {
+      const draggedTabId = parseInt(id);
+      const isTop = targetChip.classList.contains('drag-over-top');
       
-      let newIndex = targetTab.index;
-      if (!isTop) newIndex += 1;
+      try {
+        const targetTabId = parseInt(targetChip.dataset.tabId);
+        const targetTab = await chrome.tabs.get(targetTabId);
+        
+        let newIndex = targetTab.index;
+        if (!isTop) newIndex += 1;
 
-      await chrome.tabs.move(draggedTabId, { 
-        windowId: targetTab.windowId, 
-        index: newIndex 
-      });
-      
-      // Re-render dashboard to reflect changes
-      await renderDashboard();
-      showToast('Tab moved');
-    } catch (err) {
-      console.error('[tab-out] Failed to move tab:', err);
+        await chrome.tabs.move(draggedTabId, { 
+          windowId: targetTab.windowId, 
+          index: newIndex 
+        });
+        
+        await renderDashboard();
+        showToast('Tab moved');
+      } catch (err) {
+        console.error('[tab-out] Failed to move tab:', err);
+      }
     }
   }
 
@@ -2389,6 +2296,69 @@ document.addEventListener('dragend', () => {
   });
   draggedEl = null;
 });
+
+
+/* ----------------------------------------------------------------
+   RESIZE LOGIC — Cards
+   ---------------------------------------------------------------- */
+
+document.addEventListener('mousedown', (e) => {
+  const handle = e.target.closest('.card-resize-handle');
+  if (!handle) return;
+
+  e.preventDefault();
+  e.stopPropagation(); // Don't trigger card drag
+
+  const card = handle.closest('.mission-card');
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startWidth = card.offsetWidth;
+  const startHeight = card.offsetHeight;
+  
+  const layoutMode = document.documentElement.getAttribute('data-layout-mode');
+  const id = card.dataset.domainId;
+
+  function onMouseMove(e) {
+    const newWidth = Math.max(160, startWidth + (e.clientX - startX));
+    const newHeight = Math.max(100, startHeight + (e.clientY - startY));
+    
+    card.style.width = `${newWidth}px`;
+    card.style.height = `${newHeight}px`;
+  }
+
+  async function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+
+    // Save dimensions
+    const { cardPositions = {} } = await chrome.storage.local.get('cardPositions');
+    
+    if (!cardPositions[id]) cardPositions[id] = {};
+    cardPositions[id].w = card.offsetWidth;
+    cardPositions[id].h = card.offsetHeight;
+
+    await chrome.storage.local.set({ cardPositions });
+    showToast('Size saved');
+  }
+
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+});
+
+
+// Handle Note Blur (Back to Preview)
+document.addEventListener('blur', (e) => {
+  if (e.target.classList.contains('note-textarea')) {
+    const card = e.target.closest('.note-card');
+    if (card) {
+      card.classList.remove('editing');
+      const preview = card.querySelector('.note-preview');
+      if (preview) {
+        preview.innerHTML = parseMarkdown(e.target.value);
+      }
+    }
+  }
+}, true); // useCapture to catch blur on children
 
 
 /* ----------------------------------------------------------------
